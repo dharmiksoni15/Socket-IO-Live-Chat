@@ -24,7 +24,7 @@ io.on("connection", (socket) => {
   socket.on("message", (text) => {
     // Validate the message
     if (typeof text !== "string" || text.trim() === "") {
-        socket.emit("messageError","Invalid message. Message cannot be empty or non-string.");
+        socket.emit("validationError","Invalid message. Message cannot be empty or non-string.");
         return;
     }
 
