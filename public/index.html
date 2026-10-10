@@ -32,7 +32,19 @@
             const input = document.getElementById("messageInput");
 
             // Send the message to the server using the "message" event
-            socket.emit("message", input.value);
+            // socket.emit("message", input.value);
+
+            // Trim the input value to remove any leading or trailing whitespace
+            const text = input.value.trim();
+          
+            // Check if the input is empty and alert the user if it is
+            if(text === "") {
+                alert("Please enter a message before sending.");
+                return;
+            }
+            
+            // Send the message to the server using the "message" event
+            socket.emit("message", text);
 
             // Clear the input field after sending
             input.value = "";
