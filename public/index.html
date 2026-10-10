@@ -1,0 +1,55 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.IO Chat</title>
+</head>
+<body>
+    <h1>Socket.IO Demo</h1>
+
+    <!-- Input field to type a message -->
+    <input id="messageInput" placeholder="Enter Message" />
+
+    <!-- Button to send the message -->
+    <button id="sendButton">Send</button>
+
+    <!-- Display received messages in this list -->
+    <ul id="messages"></ul>
+
+    <!-- Load the Socket.IO client library from the server -->
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+        // Connect to the Socket.IO server
+        const socket = io();
+
+        // Find the Send button and listen for a click
+        document.getElementById("sendButton").addEventListener("click", () => {
+
+            // Get the text entered by the user
+            const input = document.getElementById("messageInput");
+
+            // Send the message to the server using the "message" event
+            socket.emit("message", input.value);
+
+            // Clear the input field after sending
+            input.value = "";
+        });
+
+        // Listen for messages received from the server
+        socket.on("message", (text) => {
+
+            // Create a new list item for the received message
+            const li = document.createElement("li");
+
+            // Set the received message as the list item's text
+            li.textContent = text;
+
+            // Add the new message to the messages list
+            document.getElementById("messages").appendChild(li);
+        });
+    </script>
+</body>
+</html>
