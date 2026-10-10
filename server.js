@@ -22,11 +22,19 @@ io.on("connection", (socket) => {
 
   // Listen for a message sent by this client
   socket.on("message", (text) => {
-    console.log("Received:", text);
+    // Validate the message
+    if (typeof text !== "string" || text.trim() === "") {
+        return;
+    }
 
-    // Send the message to all connected clients
-    io.emit("message", text);
-  });
+    // Remove extra spaces from the message
+    const message = text.trim();
+
+    console.log("Received:", message);
+
+    // Send the valid message to all connected clients
+    io.emit("message", message);
+});
 
   // Listen when this client disconnects
   socket.on("disconnect", () => {
