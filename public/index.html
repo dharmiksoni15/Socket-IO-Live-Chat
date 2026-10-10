@@ -62,6 +62,12 @@
             // Add the new message to the messages list
             document.getElementById("messages").appendChild(li);
         });
+
+        // Listen for validation errors from the server
+        socket.on("validationError",(error)=>{
+            // Alert the user with the validation error message
+            alert(error);   
+        })
     </script>
 </body>
 </html>
