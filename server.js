@@ -37,13 +37,29 @@ io.on("connection", (socket) => {
     // io.emit("message", message);
 
     // Send the valid message to all clients in the "chatroom" room
-    io.to("chatroom").emit("message",message);
+    io.to("chatroom").emit("message", message);
   });
 
   // Add the joinRoom event listener
-  socket.on("joinRoom", (roomName) => {
-    socket.join(roomName);
-    console.log(`User Joined Room: ${roomName}`);
+  // socket.on("joinRoom",async (roomName) => {
+  //   socket.join(roomName);
+  //   console.log(`User Joined Room: ${roomName}`);
+  // });
+
+  // Add the joinRoom event listener with room switching logic
+  socket.on("joinRoom", async (roomName) => {
+    // Leave all rooms except the socket's own room
+    const rooms = [...socket.rooms];
+
+    for (const room of rooms) {
+      if (room !== socket.id) {
+        await socket.leave(room);
+        console.log(`User left room: ${room}`);
+      }
+    }
+    // Join the new room
+    await socket.join(roomName);
+    console.log(`User joined room: ${roomName}`);
   });
 
   // Listen when this client disconnects
