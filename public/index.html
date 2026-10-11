@@ -9,6 +9,15 @@
 <body>
     <h1>Socket.IO Demo</h1>
 
+    <!-- Select a chat room -->
+     <select id="roomSelect">
+        <option value="general">General</option>
+        <option value="react">React</option>
+        <option value="nodeJs">Node.js</option>
+     </select>
+
+       <button id="joinRoomButton">Join Room</button>
+
     <!-- Input field to type a message -->
     <input id="messageInput" placeholder="Enter Message" />
 
@@ -26,8 +35,18 @@
         const socket = io();
 
         // Join the "chatroom" room when the page loads
-        socket.emit("joinRoom","chatroom");
+        // socket.emit("joinRoom","react");
 
+        document.getElementById("joinRoomButton").addEventListener("click",()=>{
+            // Get the selected room from the dropdown
+            const selectedRoom=document.getElementById("roomSelect").value;
+
+            // Emit a "joinRoom" event to the server with the selected room
+            socket.emit("joinRoom",selectedRoom);
+
+            alert(`You have joined the ${selectedRoom} room.`);
+        
+        })
         // Find the Send button and listen for a click
         document.getElementById("sendButton").addEventListener("click", () => {
 
