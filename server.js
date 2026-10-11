@@ -1,4 +1,3 @@
-
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -12,9 +11,8 @@ const server = http.createServer(app);
 // Create a Socket.IO server using the HTTP server
 const io = new Server(server);
 
-// serve the html client 
+// serve the html client
 app.use(express.static("public"));
-
 
 // Listen for new client connections
 io.on("connection", (socket) => {
@@ -24,18 +22,29 @@ io.on("connection", (socket) => {
   socket.on("message", (text) => {
     // Validate the message
     if (typeof text !== "string" || text.trim() === "") {
-        socket.emit("validationError","Invalid message. Message cannot be empty or non-string.");
-        return;
+      socket.emit(
+        "validationError",
+        "Invalid message. Message cannot be empty or non-string.",
+      );
+      return;
     }
-
     // Remove extra spaces from the message
     const message = text.trim();
 
     console.log("Received:", message);
 
     // Send the valid message to all connected clients
-    io.emit("message", message);
-});
+    // io.emit("message", message);
+
+    // Send the valid message to all clients in the "chatroom" room
+    io.to("chatroom").emit("message",message);
+  });
+
+  // Add the joinRoom event listener
+  socket.on("joinRoom", (roomName) => {
+    socket.join(roomName);
+    console.log(`User Joined Room: ${roomName}`);
+  });
 
   // Listen when this client disconnects
   socket.on("disconnect", () => {

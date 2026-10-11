@@ -25,6 +25,9 @@
         // Connect to the Socket.IO server
         const socket = io();
 
+        // Join the "chatroom" room when the page loads
+        socket.emit("joinRoom","chatroom");
+
         // Find the Send button and listen for a click
         document.getElementById("sendButton").addEventListener("click", () => {
 
