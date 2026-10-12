@@ -33,18 +33,27 @@ io.on("connection", (socket) => {
 
     console.log("Received:", message);
 
+    // Check whether the user has joined a room
+    if (!socket.data.room) {
+      socket.emit("validationError", "Please join a room first.");
+      return;
+    }
+
     // Send the valid message to all connected clients
     // io.emit("message", message);
 
     // Send the valid message to all clients in the "chatroom" room
-    io.to("chatroom").emit("message", message);
-  });
+    // io.to("chatroom").emit("message", message);
+
+    // Send the valid message to all clients in the room that the user has joined
+    io.to(socket.data.room).emit("message", message); 
+    console.log("Sending to room:", socket.data.room);
 
   // Add the joinRoom event listener
   // socket.on("joinRoom",async (roomName) => {
   //   socket.join(roomName);
   //   console.log(`User Joined Room: ${roomName}`);
-  // });
+  });
 
   // Add the joinRoom event listener with room switching logic
   socket.on("joinRoom", async (roomName) => {
@@ -59,6 +68,9 @@ io.on("connection", (socket) => {
     }
     // Join the new room
     await socket.join(roomName);
+
+    socket.data.room = roomName; // Store the room name in socket data for future reference
+
     console.log(`User joined room: ${roomName}`);
   });
 
