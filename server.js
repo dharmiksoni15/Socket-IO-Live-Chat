@@ -11,12 +11,21 @@ const server = http.createServer(app);
 // Create a Socket.IO server using the HTTP server
 const io = new Server(server);
 
+// store users in a Map to keep track of their socket IDs and room names
+const users = new Map();
+
 // serve the html client
 app.use(express.static("public"));
 
 // Listen for new client connections
 io.on("connection", (socket) => {
   console.log("A user connected:", socket.id);
+
+  // store this user with theire socket ID and room name (initially null)
+  const username = `User-${socket.id.slice(0, 5)}`;
+  users.set(username,socket.id);
+  console.log("Online users:",[...users.keys()]);
+  
 
   // Listen for a message sent by this client
   socket.on("message", (text) => {
@@ -76,7 +85,15 @@ io.on("connection", (socket) => {
 
   // Listen when this client disconnects
   socket.on("disconnect", () => {
-    console.log("A user disconnected");
+    for (const [username,socketId] of users.entries()){
+    if (socketId === socket.id) {
+        users.delete(username);
+        console.log(`${username} disconnected `);
+        break;
+      }
+    }
+    console.log("online users:",[...users.keys()]);
+    
   });
 });
 
