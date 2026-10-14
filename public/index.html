@@ -1,28 +1,36 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Socket.IO Chat</title>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Socket.IO Demo</h1>
 
     <!-- Select a chat room -->
-     <select id="roomSelect">
-        <option value="general">General</option>
-        <option value="react">React</option>
-        <option value="nodeJs">Node.js</option>
-     </select>
+    <select id="roomSelect">
+      <option value="general">General</option>
+      <option value="react">React</option>
+      <option value="nodeJs">Node.js</option>
+    </select>
 
-       <button id="joinRoomButton">Join Room</button>
+    <button id="joinRoomButton">Join Room</button>
 
-    <!-- Input field to type a message -->
-    <input id="messageInput" placeholder="Enter Message" />
+    <!-- Input field to type a room message -->
+    <input id="messageInput" placeholder="Enter message" />
 
-    <!-- Button to send the message -->
+    <!-- Button to send a room message -->
     <button id="sendButton">Send</button>
+
+    <!-- Enter the recipient's username -->
+    <input id="recipientInput" placeholder="Recipient username" />
+
+    <!-- Enter a private message -->
+    <input id="privateMessageInput" placeholder="Enter private message" />
+
+    <!-- Send a private message -->
+    <button id="privateSendButton">Send Private</button>
 
     <!-- Display received messages in this list -->
     <ul id="messages"></ul>
@@ -31,65 +39,86 @@
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
-        // Connect to the Socket.IO server
-        const socket = io();
+      // Connect to the Socket.IO server
+      const socket = io();
 
-        // Join the "chatroom" room when the page loads
-        // socket.emit("joinRoom","react");
+      // Join the "chatroom" room when the page loads
+      // socket.emit("joinRoom","react");
 
-        document.getElementById("joinRoomButton").addEventListener("click",()=>{
-            // Get the selected room from the dropdown
-            const selectedRoom=document.getElementById("roomSelect").value;
+      document
+        .getElementById("joinRoomButton")
+        .addEventListener("click", () => {
+          // Get the selected room from the dropdown
+          const selectedRoom = document.getElementById("roomSelect").value;
 
-            // Emit a "joinRoom" event to the server with the selected room
-            socket.emit("joinRoom",selectedRoom);
+          // Emit a "joinRoom" event to the server with the selected room
+          socket.emit("joinRoom", selectedRoom);
 
-            alert(`You have joined the ${selectedRoom} room.`);
-        
-        })
-        // Find the Send button and listen for a click
-        document.getElementById("sendButton").addEventListener("click", () => {
+          alert(`You have joined the ${selectedRoom} room.`);
+        });
 
-            // Get the text entered by the user
-            const input = document.getElementById("messageInput");
+        // send a private message to selected user
+        document.getElementById("privateSendButton").addEventListener("click",()=>{
+            const recipient =document.getElementById("recipientInput").value.trim();
+            const message=document.getElementById("privateMessageInput").value.trim();
 
-            // Send the message to the server using the "message" event
-            // socket.emit("message", input.value);
-
-            // Trim the input value to remove any leading or trailing whitespace
-            const text = input.value.trim();
-          
-            // Check if the input is empty and alert the user if it is
-            if(text === "") {
-                alert("Please enter a message before sending.");
+            // Validate the recipient and message
+            if(recipient === "" || message === ""){
+                alert("Enter a recipient username and message");
                 return;
             }
-            
-            // Send the message to the server using the "message" event
-            socket.emit("message", text);
 
-            // Clear the input field after sending
-            input.value = "";
-        });
+            // send the private message to the server
+            socket.emit("privateMessage",{
+                to:recipient,
+                message:message
+            });
 
-        // Listen for messages received from the server
-        socket.on("message", (text) => {
-
-            // Create a new list item for the received message
-            const li = document.createElement("li");
-
-            // Set the received message as the list item's text
-            li.textContent = text;
-
-            // Add the new message to the messages list
-            document.getElementById("messages").appendChild(li);
-        });
-
-        // Listen for validation errors from the server
-        socket.on("validationError",(error)=>{
-            // Alert the user with the validation error message
-            alert(error);   
+            // clear the private message Input
+            document.getElementById("privateMessageInput").value = "";
         })
+
+      // Find the Send button and listen for a click
+      document.getElementById("sendButton").addEventListener("click", () => {
+        // Get the text entered by the user
+        const input = document.getElementById("messageInput");
+
+        // Send the message to the server using the "message" event
+        // socket.emit("message", input.value);
+
+        // Trim the input value to remove any leading or trailing whitespace
+        const text = input.value.trim();
+
+        // Check if the input is empty and alert the user if it is
+        if (text === "") {
+          alert("Please enter a message before sending.");
+          return;
+        }
+
+        // Send the message to the server using the "message" event
+        socket.emit("message", text);
+
+        // Clear the input field after sending
+        input.value = "";
+      });
+
+      // Listen for messages received from the server
+      socket.on("privateMessage", ({from, message}) => {
+        // Create a new list item for the private message
+        const li = document.createElement("li");
+
+        // Display the sender and private message
+        li.textContent = `[Private] ${from} : ${message}`;
+
+        // Add the new message to the messages list
+        document.getElementById("messages").appendChild(li);
+      });
+
+      // Listen for validation errors from the server
+      socket.on("validationError", (error) => {
+        // Alert the user with the validation error message
+        alert(error);
+      });
     </script>
-</body>
+  </body>
 </html>
