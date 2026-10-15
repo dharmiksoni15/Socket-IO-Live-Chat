@@ -31,6 +31,9 @@ io.on("connection", (socket) => {
   // Display the list of online users
   console.log("Online users:", [...users.keys()]);
 
+  // Send the current online users list to all connected clients
+io.emit("onlineUsers", [...users.keys()]);
+
   // Listen for room messages sent by this client
   socket.on("message", (text) => {
     // Validate the message type and content
@@ -94,6 +97,24 @@ io.on("connection", (socket) => {
     console.log(`Private message sent from ${username} to ${to.trim()}`);
   });
 
+  
+  // Listen when this user starts typing
+  socket.on("typing", () => {
+    console.log(`${username} started typing`);
+
+    // Notify other connected users
+    socket.broadcast.emit("typing", username);
+  });
+
+  // Listen when this user stops typing
+  socket.on("stopTyping", () => {
+    console.log(`${username} stopped typing`);
+
+    // Notify other connected users
+    socket.broadcast.emit("stopTyping", username);
+  });
+
+
   // Listen for room joining and room switching
   socket.on("joinRoom", async (roomName) => {
     // Validate the room name
@@ -137,6 +158,10 @@ io.on("connection", (socket) => {
 
     // Display the updated list of online users
     console.log("Online users:", [...users.keys()]);
+
+    // Notify all clients about the updated online users list
+    io.emit("onlineUsers",[...users.keys()]);
+    
   });
 });
 

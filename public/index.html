@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -5,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Socket.IO Chat</title>
   </head>
+
   <body>
     <h1>Socket.IO Demo</h1>
 
@@ -17,106 +19,152 @@
 
     <button id="joinRoomButton">Join Room</button>
 
-    <!-- Input field to type a room message -->
+    <!-- Room message input -->
     <input id="messageInput" placeholder="Enter message" />
-
-    <!-- Button to send a room message -->
     <button id="sendButton">Send</button>
 
-    <!-- Enter the recipient's username -->
+    <!-- Private message inputs -->
     <input id="recipientInput" placeholder="Recipient username" />
-
-    <!-- Enter a private message -->
     <input id="privateMessageInput" placeholder="Enter private message" />
-
-    <!-- Send a private message -->
     <button id="privateSendButton">Send Private</button>
 
-    <!-- Display received messages in this list -->
+    <!-- Display received messages -->
+    <h3>Messages</h3>
     <ul id="messages"></ul>
 
-    <!-- Load the Socket.IO client library from the server -->
+    <!-- Display online users -->
+    <h3>Online Users</h3>
+    <ul id="onlineUsers"></ul>
+
+    <!-- Display typing status -->
+    <p id="typingIndicator"></p>
+
+    <!-- Load Socket.IO client -->
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
       // Connect to the Socket.IO server
       const socket = io();
 
-      // Join the "chatroom" room when the page loads
-      // socket.emit("joinRoom","react");
+      // Get HTML elements
+      const messageInput = document.getElementById("messageInput");
+      const typingIndicator = document.getElementById("typingIndicator");
+      const messagesList = document.getElementById("messages");
 
+      // Store the typing timeout
+      let typingTimeout;
+
+      // Display the online users list
+      socket.on("onlineUsers", (users) => {
+        const onlineUsersList = document.getElementById("onlineUsers");
+
+        // Clear the previous list
+        onlineUsersList.innerHTML = "";
+
+        // Add each online user
+        users.forEach((username) => {
+          const li = document.createElement("li");
+          li.textContent = username;
+          onlineUsersList.appendChild(li);
+        });
+      });
+
+      // Notify other users when this user starts typing
+      messageInput.addEventListener("input", () => {
+        if (messageInput.value.trim() === "") {
+          clearTimeout(typingTimeout);
+          socket.emit("stopTyping");
+          return;
+        }
+
+        // Notify the server that this user is typing
+        socket.emit("typing");
+
+        // Reset the timeout after each input change
+        clearTimeout(typingTimeout);
+
+        // Stop the typing indicator after 1 second of inactivity
+        typingTimeout = setTimeout(() => {
+          socket.emit("stopTyping");
+        }, 1000);
+      });
+
+      // Display when another user starts typing
+      socket.on("typing", (username) => {
+        typingIndicator.textContent = `${username} is typing...`;
+      });
+
+      // Clear the typing indicator when typing stops
+      socket.on("stopTyping", () => {
+        typingIndicator.textContent = "";
+      });
+
+      // Join or switch chat rooms
       document
         .getElementById("joinRoomButton")
         .addEventListener("click", () => {
-          // Get the selected room from the dropdown
           const selectedRoom = document.getElementById("roomSelect").value;
-
-          // Emit a "joinRoom" event to the server with the selected room
           socket.emit("joinRoom", selectedRoom);
-
-          alert(`You have joined the ${selectedRoom} room.`);
         });
 
-        // send a private message to selected user
-        document.getElementById("privateSendButton").addEventListener("click",()=>{
-            const recipient =document.getElementById("recipientInput").value.trim();
-            const message=document.getElementById("privateMessageInput").value.trim();
-
-            // Validate the recipient and message
-            if(recipient === "" || message === ""){
-                alert("Enter a recipient username and message");
-                return;
-            }
-
-            // send the private message to the server
-            socket.emit("privateMessage",{
-                to:recipient,
-                message:message
-            });
-
-            // clear the private message Input
-            document.getElementById("privateMessageInput").value = "";
-        })
-
-      // Find the Send button and listen for a click
+      // Send a room message
       document.getElementById("sendButton").addEventListener("click", () => {
-        // Get the text entered by the user
-        const input = document.getElementById("messageInput");
+        const text = messageInput.value.trim();
 
-        // Send the message to the server using the "message" event
-        // socket.emit("message", input.value);
-
-        // Trim the input value to remove any leading or trailing whitespace
-        const text = input.value.trim();
-
-        // Check if the input is empty and alert the user if it is
         if (text === "") {
           alert("Please enter a message before sending.");
           return;
         }
 
-        // Send the message to the server using the "message" event
         socket.emit("message", text);
 
-        // Clear the input field after sending
-        input.value = "";
+        // Clear input and stop typing
+        messageInput.value = "";
+        clearTimeout(typingTimeout);
+        socket.emit("stopTyping");
       });
 
-      // Listen for messages received from the server
-      socket.on("privateMessage", ({from, message}) => {
-        // Create a new list item for the private message
+      // Display room messages received from the server
+      socket.on("message", (message) => {
         const li = document.createElement("li");
-
-        // Display the sender and private message
-        li.textContent = `[Private] ${from} : ${message}`;
-
-        // Add the new message to the messages list
-        document.getElementById("messages").appendChild(li);
+        li.textContent = message;
+        messagesList.appendChild(li);
       });
 
-      // Listen for validation errors from the server
+      // Send a private message
+      document
+        .getElementById("privateSendButton")
+        .addEventListener("click", () => {
+          const recipient = document
+            .getElementById("recipientInput")
+            .value.trim();
+
+          const message = document
+            .getElementById("privateMessageInput")
+            .value.trim();
+
+          if (recipient === "" || message === "") {
+            alert("Enter a recipient username and message.");
+            return;
+          }
+
+          socket.emit("privateMessage", {
+            to: recipient,
+            message: message,
+          });
+
+          document.getElementById("privateMessageInput").value = "";
+        });
+
+      // Display private messages
+      socket.on("privateMessage", ({ from, message }) => {
+        const li = document.createElement("li");
+        li.textContent = `[Private] ${from}: ${message}`;
+        messagesList.appendChild(li);
+      });
+
+      // Display validation errors
       socket.on("validationError", (error) => {
-        // Alert the user with the validation error message
         alert(error);
       });
     </script>
