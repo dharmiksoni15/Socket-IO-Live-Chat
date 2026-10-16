@@ -2,9 +2,16 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const bcrypt = require("bcryptjs");
 
 // Create an Express application
 const app = express();
+
+// Parse incoming JSON request bodies
+app.use(express.json());
+
+// Temporary storage for registered users
+const registeredUsers = new Map();
 
 // Create an HTTP server using the Express application
 const server = http.createServer(app);
@@ -17,6 +24,54 @@ const users = new Map();
 
 // Serve the HTML client from the public folder
 app.use(express.static("public"));
+
+app.post("/api/register",async(req,res)=>{
+  try {
+    const {username,password}=req.body;
+
+    // validate the registration input
+
+    if(
+      typeof username !== "string" ||
+      typeof password !== "string" ||
+      username.trim() === "" |
+      password.length < 8
+    ) {
+      return res.status(400).json({
+        message:"Username is required and password must be at least 8 characters"
+      });
+    }
+    
+    const normalizedUsername=username.trim();
+
+    // check whether the username already exists
+    if(registeredUsers.has(normalizedUsername)){
+      return res.status(409).json({
+        message:"Username already exists"
+      });
+    }
+
+  // Hash the password before storing import PropTypes from 'prop-types'
+  const hashedPassword = await bcrypt.hash(password,10);
+
+// store the user temprarily in memory 
+registeredUsers.set(normalizedUsername,{
+  username:normalizedUsername,
+  password:hashedPassword
+});
+
+return res.status(201).json({
+  message:"User registerd succesfully"
+});
+
+  } catch (error) {
+   console.error("Registration Error",error);
+   
+   return res.status(500).json({
+    message:"Internal Server Error"
+   });
+  }
+});
 
 // Listen for new client connections
 io.on("connection", (socket) => {
