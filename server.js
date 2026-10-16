@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -11,33 +10,38 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// check the JWT before allowing a socket connection
-io.use((socket,next)=>{
-  const token=socket.handshake.auth?.token;
+// Check the JWT before allowing a socket connection
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
 
-  if(!token){
+  // Reject the connection if no token was sent
+  if (!token) {
     return next(new Error("Authentication token missing"));
   }
+
   try {
-    const decoded=jwt.verify(token,process.env.JWT_SECRET);
+    // Verify the token and read the username stored inside it
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    socket.data.username=decoded.username;
+    socket.data.username = decoded.username;
 
+    // Allow the connection to continue if the token is valid
     next();
   } catch (error) {
+    // Invalid or expired tokens cannot connect
     next(new Error("invalid or expired token"));
   }
-  
-})
+});
 
+// Parse incoming JSON requests and serve the frontend files
 app.use(express.json());
 app.use(express.static("public"));
 
-// Temporary storage for registered users and online users
+// Store registered and online users in memory for now
 const registeredUsers = new Map();
 const users = new Map();
 
-// Register API
+// Register a new user
 app.post("/api/register", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -48,12 +52,14 @@ app.post("/api/register", async (req, res) => {
       });
     }
 
+    // Prevent duplicate usernames
     if (registeredUsers.has(username)) {
       return res.status(409).json({
         message: "Username already exists.",
       });
     }
 
+    // Store a hashed password instead of the original password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     registeredUsers.set(username, {
@@ -73,7 +79,7 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-// Login API
+// Check login details and return a JWT if they are correct
 app.post("/api/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -86,12 +92,14 @@ app.post("/api/login", async (req, res) => {
 
     const user = registeredUsers.get(username);
 
+    // Return the same error for an unknown username or wrong password
     if (!user) {
       return res.status(401).json({
         message: "Invalid username or password.",
       });
     }
 
+    // Compare the entered password with the stored hash
     const isPasswordValid = await bcrypt.compare(
       password,
       user.password
@@ -103,6 +111,7 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
+    // Create a token that expires after one hour
     const token = jwt.sign(
       { username: user.username },
       process.env.JWT_SECRET,
@@ -122,7 +131,7 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// Handle Socket.IO connections
+// Handle socket connections after the JWT middleware approves them
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
@@ -134,10 +143,11 @@ io.on("connection", (socket) => {
 
     users.set(socket.id, username.trim());
 
+    // Send the updated online user list to all connected clients
     io.emit("onlineUsers", Array.from(users.values()));
   });
 
-  // Join a chat room
+  // Join the room selected by the user
   socket.on("joinRoom", (room) => {
     if (typeof room !== "string" || !room.trim()) {
       return;
@@ -147,7 +157,7 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} joined room: ${room}`);
   });
 
-  // Send a message to the current room
+  // Validate and send a message to the joined room
   socket.on("message", (message) => {
     if (typeof message !== "string" || !message.trim()) {
       socket.emit("validationError", "Message cannot be empty.");
@@ -160,6 +170,7 @@ io.on("connection", (socket) => {
       message: message.trim(),
     };
 
+    // Find the room this socket joined, excluding its private socket room
     const room = Array.from(socket.rooms).find(
       (roomName) => roomName !== socket.id
     );
@@ -169,10 +180,11 @@ io.on("connection", (socket) => {
       return;
     }
 
+    // Broadcast the message to everyone in that room
     io.to(room).emit("message", messageData);
   });
 
-  // Send a private message
+  // Send a private message to a specific online user
   socket.on("privateMessage", ({ to, message } = {}) => {
     if (
       typeof to !== "string" ||
@@ -187,6 +199,7 @@ io.on("connection", (socket) => {
     const recipient = to.trim();
     const text = message.trim();
 
+    // Find the socket ID belonging to the recipient
     const recipientSocketId = Array.from(users.entries()).find(
       ([, username]) => username === recipient
     )?.[0];
@@ -198,24 +211,25 @@ io.on("connection", (socket) => {
 
     const sender = users.get(socket.id) || "Anonymous";
 
+    // Deliver the private message only to the recipient
     io.to(recipientSocketId).emit("privateMessage", {
       from: sender,
       message: text,
     });
   });
 
-  // Notify other users when someone starts typing
+  // Tell other users who is typing
   socket.on("typing", () => {
     const username = users.get(socket.id) || "Anonymous";
     socket.broadcast.emit("typing", username);
   });
 
-  // Notify other users when typing stops
+  // Clear the typing indicator when the user stops typing
   socket.on("stopTyping", () => {
     socket.broadcast.emit("stopTyping");
   });
 
-  // Remove the user when they disconnect
+  // Remove the disconnected socket from the online users list
   socket.on("disconnect", () => {
     users.delete(socket.id);
 
@@ -225,7 +239,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// Start the server
+// Start the server on the configured port
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
