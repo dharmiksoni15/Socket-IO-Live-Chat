@@ -6,32 +6,6 @@ A real-time chat application built using **Node.js, Express.js, Socket.IO, HTML,
 
 This project started with basic client-server messaging and gradually expanded to include broadcasting, chat rooms, private messaging, input validation, and JWT authentication.
 
-## UI Preview
-
-┌──────────────────────────────────────────────┐
-│  Socket.IO Chat             ● Connected      │
-├──────────────────────────────────────────────┤
-│                                              │
-│  ONLINE USERS                                │
-│  ● User 1                                    │
-│  ● User 2                                    │
-│                                              │
-├──────────────────────────────────────────────┤
-│                                              │
-│  User 1                                      │
-│  Hey! How are you?                           │
-│                                              │
-│                    I'm good. How about you?  │
-│                                      You     │
-│                                              │
-│  User 1 is typing...                         │
-│                                              │
-├──────────────────────────────────────────────┤
-│  Type your message...             [ Send ]   │
-└──────────────────────────────────────────────┘
-
-*UI preview for demonstration purposes. This image is a conceptual mockup, not a screenshot of the running application.*
-
 ## Features
 
 - Real-time messaging and broadcasting
