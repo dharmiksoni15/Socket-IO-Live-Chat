@@ -11,6 +11,25 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// check the JWT before allowing a socket connection
+io.use((socket,next)=>{
+  const token=socket.handshake.auth?.token;
+
+  if(!token){
+    return next(new Error("Authentication token missing"));
+  }
+  try {
+    const decoded=jwt.verify(token,process.env.JWT_SECRET);
+
+    socket.data.username=decoded.username;
+
+    next();
+  } catch (error) {
+    next(new Error("invalid or expired token"));
+  }
+  
+})
+
 app.use(express.json());
 app.use(express.static("public"));
 
