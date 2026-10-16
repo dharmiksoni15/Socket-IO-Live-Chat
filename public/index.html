@@ -10,162 +10,220 @@
   <body>
     <h1>Socket.IO Demo</h1>
 
-    <!-- Select a chat room -->
+    <!-- Login form -->
+    <h3>Login</h3>
+    <input id="usernameInput" placeholder="Username" />
+    <input id="passwordInput" type="password" placeholder="Password" />
+    <button id="loginButton">Login</button>
+    <p id="loginStatus"></p>
+
+    <!-- Chat room selection -->
     <select id="roomSelect">
       <option value="general">General</option>
       <option value="react">React</option>
       <option value="nodeJs">Node.js</option>
     </select>
-
     <button id="joinRoomButton">Join Room</button>
 
-    <!-- Room message input -->
+    <!-- Room messages -->
     <input id="messageInput" placeholder="Enter message" />
     <button id="sendButton">Send</button>
 
-    <!-- Private message inputs -->
+    <!-- Private messages -->
     <input id="recipientInput" placeholder="Recipient username" />
     <input id="privateMessageInput" placeholder="Enter private message" />
     <button id="privateSendButton">Send Private</button>
 
-    <!-- Display received messages -->
+    <!-- Messages and online users -->
     <h3>Messages</h3>
     <ul id="messages"></ul>
 
-    <!-- Display online users -->
     <h3>Online Users</h3>
     <ul id="onlineUsers"></ul>
 
-    <!-- Display typing status -->
     <p id="typingIndicator"></p>
 
-    <!-- Load Socket.IO client -->
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
-      // Connect to the Socket.IO server
-      const socket = io();
+      let authToken = null;
+      let socket = null;
+      let typingTimeout;
 
-      // Get HTML elements
       const messageInput = document.getElementById("messageInput");
       const typingIndicator = document.getElementById("typingIndicator");
       const messagesList = document.getElementById("messages");
+      const loginStatus = document.getElementById("loginStatus");
 
-      // Store the typing timeout
-      let typingTimeout;
+      // Log in and receive a JWT token
+      document.getElementById("loginButton").addEventListener("click", async () => {
+        const username = document.getElementById("usernameInput").value.trim();
+        const password = document.getElementById("passwordInput").value;
 
-      // Display the online users list
-      socket.on("onlineUsers", (users) => {
-        const onlineUsersList = document.getElementById("onlineUsers");
+        if (!username || !password) {
+          loginStatus.textContent = "Enter username and password.";
+          return;
+        }
 
-        // Clear the previous list
-        onlineUsersList.innerHTML = "";
+        try {
+          const response = await fetch("/api/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ username, password }),
+          });
 
-        // Add each online user
-        users.forEach((username) => {
-          const li = document.createElement("li");
-          li.textContent = username;
-          onlineUsersList.appendChild(li);
-        });
+          const data = await response.json();
+
+          if (!response.ok) {
+            loginStatus.textContent = data.message;
+            return;
+          }
+
+          authToken = data.token;
+          loginStatus.textContent = "Login successful. Connecting to chat...";
+
+          // Close the previous connection if the user logs in again
+          if (socket) {
+            socket.disconnect();
+          }
+
+          // Send the JWT token when connecting to Socket.IO
+          socket = io({
+            auth: {
+              token: authToken,
+            },
+          });
+
+          socket.on("connect", () => {
+            loginStatus.textContent = "Login successful. Connected to chat.";
+          });
+
+          socket.on("connect_error", (error) => {
+            loginStatus.textContent = `Connection failed: ${error.message}`;
+          });
+
+          // Update the online users list
+          socket.on("onlineUsers", (users) => {
+            const onlineUsersList = document.getElementById("onlineUsers");
+            onlineUsersList.innerHTML = "";
+
+            users.forEach((username) => {
+              const li = document.createElement("li");
+              li.textContent = username;
+              onlineUsersList.appendChild(li);
+            });
+          });
+
+          // Display typing status
+          socket.on("typing", (username) => {
+            typingIndicator.textContent = `${username} is typing...`;
+          });
+
+          socket.on("stopTyping", () => {
+            typingIndicator.textContent = "";
+          });
+
+          // Display room messages
+          socket.on("message", (message) => {
+            const li = document.createElement("li");
+
+            if (typeof message === "object" && message !== null) {
+              li.textContent = `${message.username}: ${message.message}`;
+            } else {
+              li.textContent = message;
+            }
+
+            messagesList.appendChild(li);
+          });
+
+          // Display private messages
+          socket.on("privateMessage", ({ from, message }) => {
+            const li = document.createElement("li");
+            li.textContent = `[Private] ${from}: ${message}`;
+            messagesList.appendChild(li);
+          });
+
+          // Show server-side validation errors
+          socket.on("validationError", (error) => {
+            alert(error);
+          });
+        } catch (error) {
+          loginStatus.textContent = "Unable to connect to the server.";
+          console.error("Login request failed:", error);
+        }
       });
 
-      // Notify other users when this user starts typing
-      messageInput.addEventListener("input", () => {
+      // Send typing status to other users
+      function handleTyping() {
+        if (!socket || !socket.connected) return;
+
         if (messageInput.value.trim() === "") {
           clearTimeout(typingTimeout);
           socket.emit("stopTyping");
           return;
         }
 
-        // Notify the server that this user is typing
         socket.emit("typing");
 
-        // Reset the timeout after each input change
         clearTimeout(typingTimeout);
-
-        // Stop the typing indicator after 1 second of inactivity
         typingTimeout = setTimeout(() => {
           socket.emit("stopTyping");
         }, 1000);
-      });
+      }
 
-      // Display when another user starts typing
-      socket.on("typing", (username) => {
-        typingIndicator.textContent = `${username} is typing...`;
-      });
+      messageInput.addEventListener("input", handleTyping);
 
-      // Clear the typing indicator when typing stops
-      socket.on("stopTyping", () => {
-        typingIndicator.textContent = "";
-      });
+      // Join the selected room
+      document.getElementById("joinRoomButton").addEventListener("click", () => {
+        if (!socket || !socket.connected) {
+          alert("Please log in and connect first.");
+          return;
+        }
 
-      // Join or switch chat rooms
-      document
-        .getElementById("joinRoomButton")
-        .addEventListener("click", () => {
-          const selectedRoom = document.getElementById("roomSelect").value;
-          socket.emit("joinRoom", selectedRoom);
-        });
+        const selectedRoom = document.getElementById("roomSelect").value;
+        socket.emit("joinRoom", selectedRoom);
+      });
 
       // Send a room message
       document.getElementById("sendButton").addEventListener("click", () => {
+        if (!socket || !socket.connected) {
+          alert("Please log in and connect first.");
+          return;
+        }
+
         const text = messageInput.value.trim();
 
-        if (text === "") {
+        if (!text) {
           alert("Please enter a message before sending.");
           return;
         }
 
         socket.emit("message", text);
-
-        // Clear input and stop typing
         messageInput.value = "";
+
         clearTimeout(typingTimeout);
         socket.emit("stopTyping");
       });
 
-      // Display room messages received from the server
-      socket.on("message", (message) => {
-        const li = document.createElement("li");
-        li.textContent = message;
-        messagesList.appendChild(li);
-      });
-
       // Send a private message
-      document
-        .getElementById("privateSendButton")
-        .addEventListener("click", () => {
-          const recipient = document
-            .getElementById("recipientInput")
-            .value.trim();
+      document.getElementById("privateSendButton").addEventListener("click", () => {
+        if (!socket || !socket.connected) {
+          alert("Please log in and connect first.");
+          return;
+        }
 
-          const message = document
-            .getElementById("privateMessageInput")
-            .value.trim();
+        const recipient = document.getElementById("recipientInput").value.trim();
+        const message = document.getElementById("privateMessageInput").value.trim();
 
-          if (recipient === "" || message === "") {
-            alert("Enter a recipient username and message.");
-            return;
-          }
+        if (!recipient || !message) {
+          alert("Enter a recipient username and message.");
+          return;
+        }
 
-          socket.emit("privateMessage", {
-            to: recipient,
-            message: message,
-          });
-
-          document.getElementById("privateMessageInput").value = "";
-        });
-
-      // Display private messages
-      socket.on("privateMessage", ({ from, message }) => {
-        const li = document.createElement("li");
-        li.textContent = `[Private] ${from}: ${message}`;
-        messagesList.appendChild(li);
-      });
-
-      // Display validation errors
-      socket.on("validationError", (error) => {
-        alert(error);
+        socket.emit("privateMessage", { to: recipient, message });
+        document.getElementById("privateMessageInput").value = "";
       });
     </script>
   </body>
