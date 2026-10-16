@@ -3,224 +3,273 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
 
-// Create an Express application
 const app = express();
-
-// Parse incoming JSON request bodies
-app.use(express.json());
-
-// Temporary storage for registered users
-const registeredUsers = new Map();
-
-// Create an HTTP server using the Express application
 const server = http.createServer(app);
-
-// Create a Socket.IO server using the HTTP server
 const io = new Server(server);
 
-// Store usernames and their socket IDs
-const users = new Map();
-
-// Serve the HTML client from the public folder
+// Middleware
+app.use(express.json());
 app.use(express.static("public"));
 
-app.post("/api/register",async(req,res)=>{
+// Temporary in-memory storage
+const registeredUsers = new Map();
+const users = new Map();
+
+// ==================== STEP 9.2: REGISTER ====================
+app.post("/api/register", async (req, res) => {
   try {
-    const {username,password}=req.body;
+    const { username, password } = req.body;
 
-    // validate the registration input
-
-    if(
+    // Validate registration input
+    if (
       typeof username !== "string" ||
       typeof password !== "string" ||
-      username.trim() === "" |
+      username.trim() === "" ||
       password.length < 8
     ) {
       return res.status(400).json({
-        message:"Username is required and password must be at least 8 characters"
+        message:
+          "Username is required and password must be at least 8 characters."
       });
     }
-    
-    const normalizedUsername=username.trim();
 
-    // check whether the username already exists
-    if(registeredUsers.has(normalizedUsername)){
+    const normalizedUsername = username.trim();
+
+    // Check for an existing username
+    if (registeredUsers.has(normalizedUsername)) {
       return res.status(409).json({
-        message:"Username already exists"
+        message: "Username already exists."
       });
     }
 
-  // Hash the password before storing import PropTypes from 'prop-types'
-  const hashedPassword = await bcrypt.hash(password,10);
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-// store the user temprarily in memory 
-registeredUsers.set(normalizedUsername,{
-  username:normalizedUsername,
-  password:hashedPassword
-});
+    // Store user temporarily in memory
+    registeredUsers.set(normalizedUsername, {
+      username: normalizedUsername,
+      password: hashedPassword
+    });
 
-return res.status(201).json({
-  message:"User registerd succesfully"
-});
-
+    return res.status(201).json({
+      message: "User registered successfully."
+    });
   } catch (error) {
-   console.error("Registration Error",error);
-   
-   return res.status(500).json({
-    message:"Internal Server Error"
-   });
+    console.error("Registration error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error."
+    });
   }
 });
 
-// Listen for new client connections
-io.on("connection", (socket) => {
-  console.log("A user connected:", socket.id);
+// ==================== STEP 9.3: LOGIN + JWT ====================
+app.post("/api/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
 
-  // Generate a username for the connected user
-  const username = `User-${socket.id.slice(0, 5)}`;
-
-  // Store the username and socket ID in the Map
-  users.set(username, socket.id);
-
-  // Display the list of online users
-  console.log("Online users:", [...users.keys()]);
-
-  // Send the current online users list to all connected clients
-io.emit("onlineUsers", [...users.keys()]);
-
-  // Listen for room messages sent by this client
-  socket.on("message", (text) => {
-    // Validate the message type and content
-    if (typeof text !== "string" || text.trim() === "") {
-      socket.emit(
-        "validationError",
-        "Invalid message. Message cannot be empty or non-string."
-      );
-      return;
+    // Validate login input
+    if (
+      typeof username !== "string" ||
+      typeof password !== "string" ||
+      username.trim() === "" ||
+      password === ""
+    ) {
+      return res.status(400).json({
+        message: "Username and password are required."
+      });
     }
 
-    // Remove extra spaces from the message
-    const message = text.trim();
+    const normalizedUsername = username.trim();
 
-    // Check whether the user has joined a room
-    if (!socket.data.room) {
-      socket.emit("validationError", "Please join a room first.");
-      return;
+    // Find registered user
+    const user = registeredUsers.get(normalizedUsername);
+
+    if (!user) {
+      return res.status(401).json({
+        message: "Invalid username or password."
+      });
     }
 
-    // Send the message to everyone in the current room
-    io.to(socket.data.room).emit("message", message);
+    // Compare entered password with stored hash
+    const isPasswordValid = await bcrypt.compare(
+      password,
+      user.password
+    );
 
-    // Log the room where the message was sent
-    console.log("Sending to room:", socket.data.room);
-  });
-
-  // Listen for private messages sent by this client
-  socket.on("privateMessage", ({ to, message } = {}) => {
-    // Validate the recipient username
-    if (typeof to !== "string" || to.trim() === "") {
-      socket.emit("validationError", "Please enter a recipient username.");
-      return;
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        message: "Invalid username or password."
+      });
     }
 
-    // Find the recipient's socket ID using their username
-    const recipientSocketId = users.get(to.trim());
+    // Check JWT secret configuration
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is missing from .env");
 
-    // Check whether the recipient is online
-    if (!recipientSocketId) {
-      socket.emit(
-        "validationError",
-        `User ${to} not found or not online.`
-      );
-      return;
+      return res.status(500).json({
+        message: "Server authentication is not configured."
+      });
     }
 
-    // Validate the private message content
-    if (typeof message !== "string" || message.trim() === "") {
-      socket.emit("validationError", "Private message cannot be empty.");
-      return;
-    }
+    // Generate JWT token
+    const token = jwt.sign(
+      { username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
 
-    // Send the private message only to the recipient
-    io.to(recipientSocketId).emit("privateMessage", {
-      from: username,
-      message: message.trim()
+    return res.status(200).json({
+      message: "Login successful.",
+      token
     });
+  } catch (error) {
+    console.error("Login error:", error);
 
-    // Log the private message delivery
-    console.log(`Private message sent from ${username} to ${to.trim()}`);
-  });
+    return res.status(500).json({
+      message: "Internal server error."
+    });
+  }
+});
 
-  
-  // Listen when this user starts typing
-  socket.on("typing", () => {
-    console.log(`${username} started typing`);
+// ==================== SOCKET.IO CHAT ====================
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
 
-    // Notify other connected users
-    socket.broadcast.emit("typing", username);
-  });
-
-  // Listen when this user stops typing
-  socket.on("stopTyping", () => {
-    console.log(`${username} stopped typing`);
-
-    // Notify other connected users
-    socket.broadcast.emit("stopTyping", username);
-  });
-
-
-  // Listen for room joining and room switching
-  socket.on("joinRoom", async (roomName) => {
-    // Validate the room name
-    if (typeof roomName !== "string" || roomName.trim() === "") {
-      socket.emit("validationError", "Please select a valid room.");
+  // Join a room
+  socket.on("joinRoom", (roomName) => {
+    if (typeof roomName !== "string" || !roomName.trim()) {
+      socket.emit("validationError", "Room name cannot be empty");
       return;
     }
 
-    // Get all rooms currently joined by this socket
-    const rooms = [...socket.rooms];
+    const room = roomName.trim();
 
-    // Leave previous rooms, except the socket's own private room
-    for (const room of rooms) {
-      if (room !== socket.id) {
-        await socket.leave(room);
-        console.log(`${username} left room: ${room}`);
+    // Leave previously joined application rooms
+    for (const joinedRoom of socket.rooms) {
+      if (joinedRoom !== socket.id) {
+        socket.leave(joinedRoom);
       }
     }
 
-    // Join the selected room
-    const selectedRoom = roomName.trim();
-    await socket.join(selectedRoom);
+    socket.join(room);
+    socket.emit("roomJoined", room);
 
-    // Store the current room name for future messages
-    socket.data.room = selectedRoom;
-
-    // Log the room joining event
-    console.log(`${username} joined room: ${selectedRoom}`);
+    console.log(`${socket.id} joined room: ${room}`);
   });
 
-  // Listen when this client disconnects
-  socket.on("disconnect", () => {
-    // Find and remove the disconnected user from the Map
-    for (const [storedUsername, socketId] of users.entries()) {
-      if (socketId === socket.id) {
-        users.delete(storedUsername);
-        console.log(`${storedUsername} disconnected`);
-        break;
-      }
+  // Receive and broadcast room messages
+  socket.on("message", (message) => {
+    if (typeof message !== "string" || message.trim() === "") {
+      socket.emit("validationError", "Message cannot be empty");
+      return;
     }
 
-    // Display the updated list of online users
-    console.log("Online users:", [...users.keys()]);
+    const currentRoom = [...socket.rooms].find(
+      (room) => room !== socket.id
+    );
 
-    // Notify all clients about the updated online users list
-    io.emit("onlineUsers",[...users.keys()]);
-    
+    if (!currentRoom) {
+      socket.emit(
+        "validationError",
+        "Join a room before sending messages"
+      );
+      return;
+    }
+
+    const cleanMessage = message.trim();
+
+    console.log("Received:", cleanMessage);
+
+    io.to(currentRoom).emit("message", {
+      username: users.get(socket.id) || "Anonymous",
+      message: cleanMessage
+    });
+  });
+
+  // Set username and update online users
+  socket.on("setUsername", (username) => {
+    if (typeof username !== "string" || !username.trim()) {
+      socket.emit("validationError", "Username cannot be empty");
+      return;
+    }
+
+    users.set(socket.id, username.trim());
+
+    io.emit("onlineUsers", [...users.values()]);
+  });
+
+  // Send private messages
+  socket.on("privateMessage", ({ to, message } = {}) => {
+    if (
+      typeof to !== "string" ||
+      typeof message !== "string" ||
+      !to.trim() ||
+      !message.trim()
+    ) {
+      socket.emit(
+        "validationError",
+        "Recipient and message are required"
+      );
+      return;
+    }
+
+    const recipient = [...users.entries()].find(
+      ([, username]) => username === to.trim()
+    );
+
+    if (!recipient) {
+      socket.emit("validationError", "Recipient is not online");
+      return;
+    }
+
+    const payload = {
+      from: users.get(socket.id) || "Anonymous",
+      message: message.trim()
+    };
+
+    io.to(recipient[0]).emit("privateMessage", payload);
+    socket.emit("privateMessageSent", payload);
+  });
+
+  // Typing indicator
+  socket.on("typing", () => {
+    socket.broadcast.emit(
+      "typing",
+      users.get(socket.id) || "Anonymous"
+    );
+  });
+
+  // Stop typing indicator
+  socket.on("stopTyping", () => {
+    socket.broadcast.emit(
+      "stopTyping",
+      users.get(socket.id) || "Anonymous"
+    );
+  });
+
+  // Handle disconnect
+  socket.on("disconnect", () => {
+    const username = users.get(socket.id);
+
+    users.delete(socket.id);
+
+    console.log("User disconnected:", socket.id);
+
+    io.emit("onlineUsers", [...users.values()]);
+
+    if (username) {
+      io.emit("stopTyping", username);
+    }
   });
 });
 
-// Start the server on port 5000
-server.listen(5000, () => {
-  console.log("Server running on port 5000");
+// ==================== START SERVER ====================
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
